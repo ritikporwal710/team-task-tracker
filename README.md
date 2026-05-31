@@ -6,32 +6,31 @@ Built for the SDE II take-home: org-scoped tasks, three roles, enforced status t
 
 ---
 
-## Quick start
+## **How to run**
+
+**Prerequisite:** [Docker Desktop](https://www.docker.com/products/docker-desktop/) running.
+
+**From the project root:**
 
 ```bash
 docker compose up --build
 ```
 
-That’s it. No manual DB setup.
+**Open the app:**
 
-| What | URL |
-|------|-----|
-| **Frontend (Kanban UI)** | http://localhost |
-| **API health** | http://localhost:8080/api/health |
-| **Swagger UI** | http://localhost:8080/swagger-ui.html |
-| **OpenAPI JSON** | http://localhost:8080/v3/api-docs |
+| | URL |
+|---|-----|
+| **Frontend** | **http://localhost** |
+| **API** | **http://localhost:8080/api/health** |
+| **Swagger** | **http://localhost:8080/swagger-ui.html** |
 
-Fresh database (re-run SQL init):
+**Stop:** `Ctrl+C`, then `docker compose down`
+
+**Reset database (fresh schema + seed data):**
 
 ```bash
 docker compose down -v
 docker compose up --build
-```
-
-Optional env file:
-
-```bash
-cp .env.example .env
 ```
 
 ---
