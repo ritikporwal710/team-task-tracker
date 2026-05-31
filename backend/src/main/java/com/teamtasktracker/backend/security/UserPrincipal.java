@@ -24,11 +24,17 @@ public class UserPrincipal implements UserDetails {
 
 	private final List<String> roles;
 
+	private final List<String> permissions;
+
 	@Override
 	public Collection<? extends GrantedAuthority> getAuthorities() {
-		return roles.stream()
+		List<GrantedAuthority> authorities = roles.stream()
 			.map(role -> new SimpleGrantedAuthority("ROLE_" + role))
-			.toList();
+			.collect(java.util.stream.Collectors.toCollection(java.util.ArrayList::new));
+		permissions.stream()
+			.map(SimpleGrantedAuthority::new)
+			.forEach(authorities::add);
+		return authorities;
 	}
 
 	@Override
@@ -59,6 +65,10 @@ public class UserPrincipal implements UserDetails {
 	@Override
 	public boolean isEnabled() {
 		return true;
+	}
+
+	public boolean hasPermission(String permission) {
+		return permissions.contains(permission);
 	}
 
 	public boolean hasRole(String role) {

@@ -10,6 +10,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { canTransition } from "@/lib/taskTransitions";
 import type { Task, TaskStatus, UserSummary } from "@/types";
 
 export const KANBAN_COLUMNS: { status: TaskStatus; label: string }[] = [
@@ -69,6 +70,9 @@ export function TaskKanbanBoard({
     if (!task || task.status === newStatus || !canDrag(task)) {
       return;
     }
+    if (!canTransition(task.status, newStatus)) {
+      return;
+    }
     setUpdatingId(taskId);
     try {
       await onStatusChange(taskId, newStatus);
@@ -98,7 +102,13 @@ export function TaskKanbanBoard({
           )}
           onDragOver={(e) => {
             e.preventDefault();
-            setOverColumn(status);
+            if (draggingId === null) {
+              return;
+            }
+            const task = tasks.find((t) => t.id === draggingId);
+            if (task && canTransition(task.status, status)) {
+              setOverColumn(status);
+            }
           }}
           onDragLeave={() => setOverColumn(null)}
           onDrop={(e) => {

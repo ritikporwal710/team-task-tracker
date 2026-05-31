@@ -10,6 +10,7 @@ import org.springframework.security.web.authentication.WebAuthenticationDetailsS
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
+import com.teamtasktracker.backend.repository.PermissionRepository;
 import com.teamtasktracker.backend.repository.UserRepository;
 import com.teamtasktracker.backend.repository.UserRoleRepository;
 
@@ -29,6 +30,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 	private final UserRepository userRepository;
 
 	private final UserRoleRepository userRoleRepository;
+
+	private final PermissionRepository permissionRepository;
 
 	@Override
 	protected void doFilterInternal(
@@ -67,12 +70,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 				.map(ur -> ur.getRole().getName())
 				.toList();
 
+			var permissionNames = permissionRepository.findPermissionNamesByUserId(userId);
+
 			UserPrincipal principal = new UserPrincipal(
 					user.getId(),
 					user.getEmail(),
 					user.getPasswordHash(),
 					user.getOrganization().getId(),
-					roleNames);
+					roleNames,
+					permissionNames);
 
 			var authentication = new UsernamePasswordAuthenticationToken(
 					principal,

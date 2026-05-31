@@ -69,13 +69,13 @@ export function DashboardPage() {
     setLoading(true);
     setError("");
     try {
-      const [projectData, taskData, memberData] = await Promise.all([
+      const [projectData, taskPage, memberData] = await Promise.all([
         listProjects(),
-        listTasks(),
+        listTasks({ page: 1, limit: 100 }),
         listMembers(),
       ]);
       setProjects(projectData);
-      setTasks(taskData);
+      setTasks(taskPage.data);
       setMembers(memberData);
       if (projectData.length > 0 && !taskProjectId) {
         setTaskProjectId(String(projectData[0].id));

@@ -6,17 +6,9 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { getErrorMessage } from "@/services/api";
 import { register } from "@/services/auth";
 import { useAuthStore } from "@/stores/authStore";
-import type { RoleName } from "@/types";
 
 export function RegisterPage() {
   const navigate = useNavigate();
@@ -25,7 +17,6 @@ export function RegisterPage() {
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState<RoleName>("MEMBER");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -39,7 +30,7 @@ export function RegisterPage() {
         lastName: lastName || undefined,
         email,
         password,
-        role,
+        role: "MEMBER",
       });
       setAuth(response.accessToken, response.refreshToken, response.user);
       navigate("/dashboard");
@@ -53,7 +44,7 @@ export function RegisterPage() {
   return (
     <AuthLayout
       title="Create account"
-      description="Join NxtWave — you'll be added to the default organization automatically"
+      description="Join NxtWave — you'll be added to the default organization as a team member"
     >
       <form onSubmit={handleSubmit} className="space-y-4">
         {error && (
@@ -105,20 +96,6 @@ export function RegisterPage() {
             minLength={8}
             autoComplete="new-password"
           />
-        </div>
-
-        <div className="space-y-2">
-          <Label>Role</Label>
-          <Select value={role} onValueChange={(v) => setRole(v as RoleName)}>
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Select role" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="ADMIN">Admin — create projects</SelectItem>
-              <SelectItem value="MANAGER">Manager — create & assign tasks</SelectItem>
-              <SelectItem value="MEMBER">Member — update task status</SelectItem>
-            </SelectContent>
-          </Select>
         </div>
 
         <Button type="submit" className="w-full" disabled={loading}>

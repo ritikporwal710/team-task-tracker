@@ -1,7 +1,5 @@
 package com.teamtasktracker.backend.dto.common;
 
-import java.time.Instant;
-
 import lombok.Builder;
 import lombok.Getter;
 
@@ -11,8 +9,8 @@ public class ErrorResponse {
 
 	private int status;
 
-	private String message;
+	private String code;
 
-	private Instant timestamp;
+	private String message;
 
 }

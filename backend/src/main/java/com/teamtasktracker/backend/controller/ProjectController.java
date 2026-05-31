@@ -1,10 +1,7 @@
 package com.teamtasktracker.backend.controller;
 
-import java.util.List;
-
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -26,13 +23,12 @@ public class ProjectController {
 	private final ProjectService projectService;
 
 	@PostMapping
-	@PreAuthorize("hasRole('ADMIN')")
 	public ResponseEntity<ProjectResponse> createProject(@Valid @RequestBody CreateProjectRequest request) {
 		return ResponseEntity.status(HttpStatus.CREATED).body(projectService.createProject(request));
 	}
 
 	@GetMapping
-	public ResponseEntity<List<ProjectResponse>> listProjects() {
+	public ResponseEntity<java.util.List<ProjectResponse>> listProjects() {
 		return ResponseEntity.ok(projectService.listProjects());
 	}
 

@@ -55,8 +55,16 @@ export interface UserSummary {
   roles: RoleName[];
 }
 
+export interface PageResponse<T> {
+  data: T[];
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+}
+
 export interface ApiError {
   status: number;
+  code: string;
   message: string;
-  timestamp: string;
 }

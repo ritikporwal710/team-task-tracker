@@ -44,15 +44,12 @@ api.interceptors.response.use(
       refreshPromise = api
         .post("/auth/refresh", { refreshToken })
         .then((res) => {
-          const { accessToken, user } = res.data;
-          useAuthStore.getState().setAccessToken(accessToken);
-          if (user) {
-            useAuthStore.getState().setAuth(
-              accessToken,
-              refreshToken,
-              user,
-            );
-          }
+          const { accessToken, refreshToken: newRefreshToken, user } = res.data;
+          useAuthStore.getState().setAuth(
+            accessToken,
+            newRefreshToken,
+            user,
+          );
           return accessToken as string;
         })
         .catch(() => {

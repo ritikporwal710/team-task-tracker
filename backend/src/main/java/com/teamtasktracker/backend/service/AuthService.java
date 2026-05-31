@@ -15,6 +15,7 @@ import com.teamtasktracker.backend.domain.entity.UserRole;
 import com.teamtasktracker.backend.dto.auth.AuthResponse;
 import com.teamtasktracker.backend.dto.auth.LoginRequest;
 import com.teamtasktracker.backend.dto.auth.RegisterRequest;
+import com.teamtasktracker.backend.exception.ApiException;
 import com.teamtasktracker.backend.repository.OrganizationRepository;
 import com.teamtasktracker.backend.repository.RoleRepository;
 import com.teamtasktracker.backend.repository.SessionRepository;
@@ -52,7 +53,7 @@ public class AuthService {
 	@Transactional
 	public AuthResponse register(RegisterRequest request) {
 		if (userRepository.existsByEmailIgnoreCase(request.getEmail())) {
-			throw new IllegalArgumentException("Email is already registered");
+			throw new ApiException(400, "EMAIL_EXISTS", "Email is already registered");
 		}
 
 		Organization organization = organizationRepository
@@ -63,8 +64,9 @@ public class AuthService {
 				return organizationRepository.save(org);
 			});
 
-		var role = roleRepository.findByNameIgnoreCaseAndActiveTrue(request.getRole().name())
-			.orElseThrow(() -> new IllegalArgumentException("Invalid role"));
+		// Public registration always creates a MEMBER (roles assigned by admin separately)
+		var role = roleRepository.findByNameIgnoreCaseAndActiveTrue("MEMBER")
+			.orElseThrow(() -> new ApiException(500, "ROLE_NOT_FOUND", "Default role not configured"));
 
 		User user = new User();
 		user.setOrganization(organization);
@@ -87,10 +89,10 @@ public class AuthService {
 	@Transactional
 	public AuthResponse login(LoginRequest request) {
 		User user = userRepository.findByEmailWithOrganization(request.getEmail().trim().toLowerCase())
-			.orElseThrow(() -> new IllegalArgumentException("Invalid email or password"));
+			.orElseThrow(() -> new ApiException(401, "INVALID_CREDENTIALS", "Invalid email or password"));
 
 		if (!passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
-			throw new IllegalArgumentException("Invalid email or password");
+			throw new ApiException(401, "INVALID_CREDENTIALS", "Invalid email or password");
 		}
 
 		List<String> roles = userRoleRepository.findActiveByUserId(user.getId()).stream()
@@ -104,29 +106,28 @@ public class AuthService {
 	public AuthResponse refresh(String refreshToken) {
 		Claims claims = jwtService.parseToken(refreshToken);
 		if (!jwtService.isRefreshToken(claims)) {
-			throw new IllegalArgumentException("Invalid refresh token");
+			throw new ApiException(401, "INVALID_TOKEN", "Invalid refresh token");
 		}
 
 		String tokenHash = tokenHasher.hash(refreshToken);
 		Session session = sessionRepository.findActiveByRefreshTokenHash(tokenHash)
-			.orElseThrow(() -> new IllegalArgumentException("Invalid refresh token"));
+			.orElseThrow(() -> new ApiException(401, "INVALID_TOKEN", "Invalid refresh token"));
 
 		if (session.getExpiresAt().isBefore(LocalDateTime.now())) {
-			throw new IllegalArgumentException("Refresh token expired");
+			throw new ApiException(401, "TOKEN_EXPIRED", "Refresh token expired");
 		}
+
+		// Rotation: revoke the old session
+		session.setRevokedAt(LocalDateTime.now());
+		session.setActive(false);
+		sessionRepository.save(session);
 
 		User user = session.getUser();
 		List<String> roles = userRoleRepository.findActiveByUserId(user.getId()).stream()
 			.map(ur -> ur.getRole().getName())
 			.toList();
 
-		String newAccessToken = jwtService.generateAccessToken(user.getId(), user.getEmail(), roles);
-		return AuthResponse.builder()
-			.accessToken(newAccessToken)
-			.refreshToken(refreshToken)
-			.accessTokenExpiresInMs(jwtService.getAccessTokenExpirationMs())
-			.user(toUserResponse(user, roles))
-			.build();
+		return buildAuthResponse(user, roles);
 	}
 
 	private AuthResponse buildAuthResponse(User user, List<String> roles) {
