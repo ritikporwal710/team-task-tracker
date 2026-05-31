@@ -10,3 +10,8 @@ server:
 app:
   cors:
     allowed-origins: http://localhost:5173,http://localhost
+  jwt:
+    secret: ${JWT_SECRET:change-me-use-a-long-random-secret-key-in-production}
+    access-token-expiration-ms: 3600000
+    refresh-token-expiration-ms: 604800000
+  default-organization: NxtWave
