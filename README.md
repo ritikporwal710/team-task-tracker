@@ -51,7 +51,7 @@ docker compose down -v
 |------------|------------------|----------------|--------------------------|
 | Frontend   | tasktracker-web  | 80             | React app (Nginx)        |
 | Backend    | tasktracker-api  | 8080           | Spring Boot REST API     |
-| PostgreSQL | tasktracker-db   | 5432           | Database                 |
+| PostgreSQL | tasktracker-db   | 5432           | Database (schema from `db/init/`) |
 
 The frontend proxies `/api` requests to the backend through Nginx, so the browser uses the same origin in Docker.
 
@@ -95,6 +95,7 @@ Install PostgreSQL locally and ensure a database named `tasktracker` exists. The
 ```
 Team Task Tracker/
 ├── backend/          Spring Boot API (Java 21, Maven)
+├── db/init/          SQL run automatically on first Postgres startup
 ├── frontend/         React + Vite + shadcn/ui
 ├── docker-compose.yml
 ├── .env.example
@@ -156,4 +157,19 @@ Spring profiles:
 
 ```bash
 docker compose up --build
+```
+
+**Schema not created / tables missing**
+
+Init scripts in `db/init/` run only on the **first** Postgres startup (when the `postgres_data` volume is empty). To re-run them:
+
+```bash
+docker compose down -v
+docker compose up postgres -d
+```
+
+Then verify tables exist:
+
+```bash
+docker exec -it tasktracker-db psql -U postgres -d tasktracker -c "\dt"
 ```

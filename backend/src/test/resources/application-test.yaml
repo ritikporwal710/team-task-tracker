@@ -8,3 +8,10 @@ spring:
     hibernate:
       ddl-auto: create-drop
     database-platform: org.hibernate.dialect.H2Dialect
+
+app:
+  jwt:
+    secret: test-secret-key-that-is-at-least-256-bits-long-for-hmac-sha256-algorithm
+    access-token-expiration-ms: 3600000
+    refresh-token-expiration-ms: 604800000
+  default-organization: NxtWave
