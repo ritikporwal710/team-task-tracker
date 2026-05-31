@@ -19,12 +19,15 @@ import com.teamtasktracker.backend.dto.common.PageResponse;
 import com.teamtasktracker.backend.dto.task.AssignTaskRequest;
 import com.teamtasktracker.backend.dto.task.CreateTaskRequest;
 import com.teamtasktracker.backend.dto.task.TaskResponse;
+import com.teamtasktracker.backend.dto.task.TaskStatusHistoryResponse;
 import com.teamtasktracker.backend.dto.task.UpdateTaskRequest;
 import com.teamtasktracker.backend.dto.task.UpdateTaskStatusRequest;
 import com.teamtasktracker.backend.service.TaskService;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/tasks")
@@ -41,6 +44,12 @@ public class TaskController {
 			@RequestParam(required = false) TaskPriority priority,
 			@RequestParam(required = false) Long assignee) {
 		return ResponseEntity.ok(taskService.listTasks(page, limit, status, priority, assignee));
+	}
+
+	@GetMapping("/status-history")
+	public ResponseEntity<List<TaskStatusHistoryResponse>> listStatusHistory(
+			@RequestParam(defaultValue = "30") int limit) {
+		return ResponseEntity.ok(taskService.listStatusHistory(limit));
 	}
 
 	@GetMapping("/{id}")

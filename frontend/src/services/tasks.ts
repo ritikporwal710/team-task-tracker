@@ -1,5 +1,5 @@
 import { api } from "@/services/api";
-import type { PageResponse, Task, TaskPriority, TaskStatus } from "@/types";
+import type { PageResponse, Task, TaskPriority, TaskStatus, TaskStatusHistoryEntry } from "@/types";
 
 export async function listTasks(params?: {
   page?: number;
@@ -41,6 +41,15 @@ export async function updateTaskStatus(
   const { data } = await api.patch<Task>(`/tasks/${taskId}/status`, {
     status,
     remarks,
+  });
+  return data;
+}
+
+export async function listStatusHistory(
+  limit = 30,
+): Promise<TaskStatusHistoryEntry[]> {
+  const { data } = await api.get<TaskStatusHistoryEntry[]>("/tasks/status-history", {
+    params: { limit },
   });
   return data;
 }

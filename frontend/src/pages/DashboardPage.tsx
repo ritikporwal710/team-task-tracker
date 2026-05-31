@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { TaskKanbanBoard } from "@/components/tasks/TaskKanbanBoard";
+import { TaskAuditLog } from "@/components/tasks/TaskAuditLog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -26,12 +27,13 @@ import { createProject, listProjects } from "@/services/projects";
 import {
   assignTask,
   createTask,
+  listStatusHistory,
   listTasks,
   updateTaskStatus,
 } from "@/services/tasks";
 import { listMembers } from "@/services/users";
 import { useAuthStore } from "@/stores/authStore";
-import type { Project, Task, TaskPriority, TaskStatus, UserSummary } from "@/types";
+import type { Project, Task, TaskPriority, TaskStatus, TaskStatusHistoryEntry, UserSummary } from "@/types";
 
 const TASK_PRIORITIES: TaskPriority[] = ["LOW", "MEDIUM", "HIGH"];
 
@@ -43,6 +45,8 @@ export function DashboardPage() {
 
   const [projects, setProjects] = useState<Project[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [auditLog, setAuditLog] = useState<TaskStatusHistoryEntry[]>([]);
+  const [auditLoading, setAuditLoading] = useState(false);
   const [members, setMembers] = useState<UserSummary[]>([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -63,7 +67,21 @@ export function DashboardPage() {
 
   const isManager = hasRole("MANAGER");
   const isMember = hasRole("MEMBER");
+  const isAdmin = hasRole("ADMIN");
   const showKanban = isManager || isMember;
+  const showActivityLog = showKanban || isAdmin;
+
+  async function loadAuditLog() {
+    setAuditLoading(true);
+    try {
+      const historyData = await listStatusHistory(30);
+      setAuditLog(historyData);
+    } catch (err) {
+      setError((prev) => prev || getErrorMessage(err));
+    } finally {
+      setAuditLoading(false);
+    }
+  }
 
   async function loadData() {
     setLoading(true);
@@ -75,7 +93,7 @@ export function DashboardPage() {
         listMembers(),
       ]);
       setProjects(projectData);
-      setTasks(taskPage.data);
+      setTasks(taskPage.data ?? []);
       setMembers(memberData);
       if (projectData.length > 0 && !taskProjectId) {
         setTaskProjectId(String(projectData[0].id));
@@ -85,6 +103,7 @@ export function DashboardPage() {
     } finally {
       setLoading(false);
     }
+    await loadAuditLog();
   }
 
   useEffect(() => {
@@ -133,6 +152,7 @@ export function DashboardPage() {
     try {
       await updateTaskStatus(taskId, status);
       await loadData();
+      await loadAuditLog();
     } catch (err) {
       setError(getErrorMessage(err));
       await loadData();
@@ -365,6 +385,24 @@ export function DashboardPage() {
                   emptyMessage={kanbanEmptyMessage}
                 />
               )}
+            </CardContent>
+          </Card>
+        )}
+
+        {showActivityLog && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Activity log</CardTitle>
+              <CardDescription>
+                Recent task status changes
+                {isMember && !isManager && !isAdmin
+                  ? " for your assigned tasks"
+                  : " in your organization"}
+                .
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <TaskAuditLog entries={auditLog} loading={auditLoading} />
             </CardContent>
           </Card>
         )}

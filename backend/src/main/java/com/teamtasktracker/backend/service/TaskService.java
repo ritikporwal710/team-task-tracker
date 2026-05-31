@@ -4,6 +4,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -15,6 +16,7 @@ import com.teamtasktracker.backend.dto.common.PageResponse;
 import com.teamtasktracker.backend.dto.task.AssignTaskRequest;
 import com.teamtasktracker.backend.dto.task.CreateTaskRequest;
 import com.teamtasktracker.backend.dto.task.TaskResponse;
+import com.teamtasktracker.backend.dto.task.TaskStatusHistoryResponse;
 import com.teamtasktracker.backend.dto.task.UpdateTaskRequest;
 import com.teamtasktracker.backend.dto.task.UpdateTaskStatusRequest;
 import com.teamtasktracker.backend.exception.ApiException;
@@ -198,6 +200,28 @@ public class TaskService {
 				priority);
 	}
 
+	@Transactional(readOnly = true)
+	public List<TaskStatusHistoryResponse> listStatusHistory(int limit) {
+		UserPrincipal currentUser = securityUtils.currentUser();
+		int safeLimit = Math.min(Math.max(limit, 1), 100);
+		var pageable = PageRequest.of(0, safeLimit);
+
+		List<TaskStatusHistory> entries;
+		if (!currentUser.hasRole("MANAGER") && !currentUser.hasRole("ADMIN")) {
+			entries = taskStatusHistoryRepository.findRecentByOrganizationIdAndAssigneeId(
+					currentUser.getOrganizationId(),
+					currentUser.getId(),
+					pageable);
+		}
+		else {
+			entries = taskStatusHistoryRepository.findRecentByOrganizationId(
+					currentUser.getOrganizationId(),
+					pageable);
+		}
+
+		return entries.stream().map(this::toHistoryResponse).toList();
+	}
+
 	private void assertCanViewTask(UserPrincipal currentUser, Task task) {
 		if (currentUser.hasRole("MANAGER") || currentUser.hasRole("ADMIN")) {
 			return;
@@ -260,6 +284,26 @@ public class TaskService {
 			.assigneeName(assigneeName)
 			.dueDate(task.getDueDate())
 			.createdAt(task.getCreatedAt())
+			.build();
+	}
+
+	private TaskStatusHistoryResponse toHistoryResponse(TaskStatusHistory history) {
+		var task = history.getTask();
+		var user = history.getChangedBy();
+		String changedByName = user.getFirstName()
+				+ (user.getLastName() != null ? " " + user.getLastName() : "");
+
+		return TaskStatusHistoryResponse.builder()
+			.id(history.getId())
+			.taskId(task.getId())
+			.taskCode(task.getTaskCode())
+			.taskTitle(task.getTitle())
+			.oldStatus(history.getOldStatus())
+			.newStatus(history.getNewStatus())
+			.changedById(user.getId())
+			.changedByName(changedByName)
+			.remarks(history.getRemarks())
+			.changedAt(history.getCreatedAt())
 			.build();
 	}
 

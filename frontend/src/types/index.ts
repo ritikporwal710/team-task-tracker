@@ -47,6 +47,19 @@ export interface Task {
   createdAt: string;
 }
 
+export interface TaskStatusHistoryEntry {
+  id: number;
+  taskId: number;
+  taskCode: string;
+  taskTitle: string;
+  oldStatus: TaskStatus | null;
+  newStatus: TaskStatus;
+  changedById: number;
+  changedByName: string;
+  remarks?: string;
+  changedAt: string;
+}
+
 export interface UserSummary {
   id: number;
   firstName: string;
