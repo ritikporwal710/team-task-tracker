@@ -1,8 +1,8 @@
 # Team Task Tracker
 
-REST API + React frontend for a team task tracker with **JWT auth**, **RBAC**, **Redis caching**, and **Docker** deployment.
+A full-stack team task management platform with role-based access control, JWT authentication, Kanban-style task boards, and containerized deployment.
 
-Built for the SDE II take-home: org-scoped tasks, three roles, enforced status transitions, and `docker compose up` to run everything.
+Teams can register, collaborate within an organization, create projects, assign tasks, and track work through a visual board — with every status change recorded in an audit log.
 
 ---
 
@@ -35,198 +35,128 @@ docker compose up --build
 
 ---
 
-## Assignment checklist
+## Tech stack
 
-| Requirement | Status |
-|-------------|--------|
-| Register / Login with JWT | Done |
-| Access token **1 hour**, refresh **7 days** | Done |
-| **Refresh token rotation** (new refresh on each `/auth/refresh`) | Done |
-| RBAC: ADMIN, MANAGER, MEMBER | Done |
-| Permissions via `roles`, `permissions`, `user_roles`, `role_permissions` | Done |
-| RBAC enforced in **middleware** (`RbacAuthorizationFilter`), not controllers | Done |
-| Task CRUD + assign + status | Done |
-| Status transitions enforced server-side | Done |
-| Task list pagination + filters (`page`, `limit`, `status`, `priority`, `assignee`) | Done |
-| `due_date` on tasks | Done |
-| Redis cache on task list (per assignee) + invalidation | Done |
-| Error format `{ status, code, message }` | Done |
-| Docker Compose (Postgres + Redis + API + UI) | Done |
-| Swagger / OpenAPI | Done |
-| DB design documented | [docs/DATABASE.md](docs/DATABASE.md) |
-| Frontend Kanban board (bonus) | Done |
-| Unit/integration tests (bonus) | Partial — context load test only |
+| Layer | Technologies |
+|-------|----------------|
+| **Backend** | Java 21, Spring Boot 3.5, Spring Security, JPA, JWT |
+| **Frontend** | React 19, TypeScript, Vite, shadcn/ui, Zustand |
+| **Database** | PostgreSQL 16 |
+| **Cache** | Redis 7 |
+| **DevOps** | Docker, Docker Compose, Nginx |
 
 ---
 
-## Auth flow
+## Features
 
-### Register
-`POST /api/auth/register` — creates user in **NxtWave** org as **MEMBER** (public signup cannot pick ADMIN/MANAGER).
+### Authentication & security
+- User registration and login with **BCrypt** password hashing
+- **JWT access tokens** (1 hour) and **refresh tokens** (7 days)
+- **Refresh token rotation** — each refresh revokes the old session and issues a new token
+- Refresh tokens stored as **SHA-256 hashes** in the database (never plain text)
 
-### Login
-`POST /api/auth/login` — returns:
-```json
-{
-  "accessToken": "...",
-  "refreshToken": "...",
-  "accessTokenExpiresInMs": 3600000,
-  "user": { "id": 1, "email": "...", "roles": ["MEMBER"], ... }
-}
+### Role-based access control
+Three roles with distinct capabilities:
+
+| Role | Capabilities |
+|------|----------------|
+| **Admin** | Full access — manage users, projects, and tasks |
+| **Manager** | Create projects and tasks, assign members; cannot manage users |
+| **Member** | View and update status on assigned tasks only |
+
+Permissions are data-driven via `roles`, `permissions`, `user_roles`, and `role_permissions` tables. A middleware filter (`RbacAuthorizationFilter`) enforces access before requests reach controllers.
+
+### Task management
+- Full task CRUD with title, description, priority, status, assignee, and due date
+- **Enforced status transitions** on the server:
+  ```
+  TODO → IN_PROGRESS → IN_REVIEW → DONE
+           ↘ BLOCKED (from any active state)
+  BLOCKED → TODO (unblock, then continue)
+  ```
+- Paginated task listing with filters by status, priority, and assignee
+- **Kanban board** with drag-and-drop status updates
+- **Activity log** — audit trail of every status change (who, when, old → new status)
+
+### Performance
+- **Redis caching** for task list queries, keyed by organization, assignee, page, and filters
+- Cache invalidation on any task mutation (create, update, assign, status change, delete)
+
+### API & documentation
+- RESTful API with consistent error responses: `{ status, code, message }`
+- **Swagger / OpenAPI** at `/swagger-ui.html`
+
+---
+
+## Architecture
+
+```
+┌─────────────┐     ┌─────────────┐     ┌──────────────┐
+│   React     │────▶│  Spring Boot │────▶│  PostgreSQL  │
+│   (Nginx)   │     │     API      │     │              │
+└─────────────┘     └──────┬──────┘     └──────────────┘
+                           │
+                    ┌──────▼──────┐
+                    │    Redis    │
+                    │   (cache)   │
+                    └─────────────┘
 ```
 
-Passwords hashed with **BCrypt**.
+**Services (Docker Compose):**
 
-### Refresh (with rotation)
-`POST /api/auth/refresh` with `{ "refreshToken": "..." }`
-
-- Old session is **revoked**
-- New access + **new refresh** token returned
-- Old refresh token cannot be reused
-
----
-
-## Roles & permissions
-
-| Role | Permissions |
-|------|-------------|
-| **ADMIN** | All — users, projects, tasks |
-| **MANAGER** | Projects + tasks + assign. No user management |
-| **MEMBER** | Update status on **assigned** tasks only |
-
-Permission checks run in `RbacAuthorizationFilter` **before** controllers.  
-Business rules (e.g. “member can only see assigned tasks”) live in the service layer.
-
-See [docs/DATABASE.md](docs/DATABASE.md) for the full write-up. Summary below.
+| Service | Container | Port |
+|---------|-----------|------|
+| Frontend | tasktracker-web | 80 |
+| Backend | tasktracker-api | 8080 |
+| PostgreSQL | tasktracker-db | 5432 |
+| Redis | tasktracker-redis | 6379 |
 
 ---
 
 ## Database design
 
-I scoped everything to an **organization** (`NxtWave` by default). Users, projects, and tasks all carry `organization_id` so the data model stays multi-tenant-ready even though this assignment uses one org.
+Multi-tenant-ready schema scoped by **organization**. Default org: **NxtWave** (created on first signup).
 
-### Core tables
+**Core tables:** `organizations`, `users`, `roles`, `permissions`, `user_roles`, `role_permissions`, `sessions`, `projects`, `tasks`, `task_status_history`
 
-| Table | Purpose |
-|-------|---------|
-| `organizations` | Team / company (NxtWave) |
-| `users` | Login accounts — email, bcrypt `password_hash`, linked to org |
-| `roles` | ADMIN, MANAGER, MEMBER (seeded) |
-| `permissions` | Fine-grained actions — `USER_*`, `PROJECT_*`, `TASK_*` |
-| `user_roles` | Which role(s) a user has |
-| `role_permissions` | Which permissions each role gets |
-| `sessions` | Hashed refresh tokens + expiry + revoke time |
-| `projects` | Work containers inside an org |
-| `tasks` | title, description, priority, status, assignee, due_date, version |
-| `task_status_history` | Audit log when status changes |
+**Key design choices:**
+- RBAC via four normalized tables instead of hardcoded role checks in code
+- Postgres ENUMs for `task_priority` and `task_status` — invalid values rejected at DB level
+- Composite index on `(organization_id, status)` for common filtered queries
+- Indexes on `assignee_id`, `due_date`, and `status` for board and cache lookups
 
-### RBAC model (how I wired it)
+Full schema write-up: [docs/DATABASE.md](docs/DATABASE.md)
 
-I did **not** hardcode “if ADMIN then …” in controllers. Instead:
-
-1. **`roles`** — the three roles from the assignment  
-2. **`permissions`** — granular actions (`TASK_CREATE`, `TASK_ASSIGN`, etc.)  
-3. **`user_roles`** — links a user to their role  
-4. **`role_permissions`** — links each role to its permissions  
-
-On every request, `RbacAuthorizationFilter` (middleware) loads the user’s permissions from these tables and blocks the call if they’re missing the required one. Controllers stay thin; business rules like “member only sees assigned tasks” live in the service layer.
-
-### Auth tokens
-
-| Token | Lifetime | Where stored |
-|-------|----------|--------------|
-| **Access token** (JWT) | **1 hour** | Not stored — stateless, verified by signature |
-| **Refresh token** (JWT) | **7 days** | SHA-256 hash in `sessions` table |
-
-**Refresh token rotation:** when `/api/auth/refresh` is called, the old session is revoked and a **new** refresh token is issued. The old refresh token cannot be reused — this limits damage if a token is stolen.
-
-### Indexes (one design decision)
-
-I indexed `status`, `assignee_id`, `due_date`, and a **composite** `(organization_id, status)` on tasks. Almost every query filters by org first, then status — so the composite index avoids scanning tasks across all orgs. Full index list is in [docs/DATABASE.md](docs/DATABASE.md).
-
-SQL init runs automatically on first Docker start: `db/init/01-schema.sql` + `02-seed-role-permissions.sql`.
+SQL init runs automatically on first Docker start via `db/init/`.
 
 ---
 
-## Design decisions & trade-offs
+## API overview
 
-These are the main choices I made and what I’d do differently with more time.
+### Auth
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/auth/register` | Create account (joins NxtWave org as Member) |
+| POST | `/api/auth/login` | Login, returns access + refresh tokens |
+| POST | `/api/auth/refresh` | Rotate refresh token, get new access token |
 
-### 1. RBAC via four tables + middleware filter
-**Why:** Matches the assignment spec and keeps permissions data-driven instead of scattered `if (role == ADMIN)` checks in controllers.  
-**Tradeoff:** More joins on login/JWT validation. Acceptable at this scale; I’d add permission caching later.
+### Tasks
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/tasks` | List tasks (paginated, filterable) |
+| GET | `/api/tasks/status-history` | Recent status change audit log |
+| POST | `/api/tasks` | Create task |
+| PATCH | `/api/tasks/{id}/status` | Update task status |
+| PATCH | `/api/tasks/{id}/assign` | Assign task to member |
 
-### 2. Refresh token rotation with a `sessions` table
-**Why:** Assignment asks for rotation. Storing only a **hash** of the refresh token means a DB leak doesn’t expose usable tokens.  
-**Tradeoff:** Stateful refresh (extra table writes on every refresh). Access tokens stay stateless for speed.
+All protected routes require `Authorization: Bearer <accessToken>`.
 
-### 3. Redis cache — flush entire task list cache on any write
-**Why:** Task list is read-heavy. Key includes org + assignee + page + filters. On any create/update/assign/status/delete I invalidate **all** list cache entries — simple and no stale data.  
-**Tradeoff:** One task update clears cache for everyone in that Redis instance. Fine for a take-home; production would invalidate only affected org/assignee keys.
-
-### 4. Postgres ENUMs for task status / priority
-**Why:** Invalid values rejected at the DB layer, not just in Java.  
-**Tradeoff:** Adding a new status requires a migration (`ALTER TYPE`), not just a code change.
-
-### 5. Public register always creates MEMBER
-**Why:** Letting users self-select ADMIN on signup would be a security hole. Admins promote roles via `user_roles` (API/UI not fully built yet).  
-**Tradeoff:** No self-serve manager/admin onboarding without a seed script or admin API.
-
-### 6. Frontend Kanban (bonus)
-**Why:** Makes the API tangible for reviewers. Drag-and-drop mirrors status transitions; server still enforces rules.  
-**Tradeoff:** Extra scope beyond core API — kept UI minimal.
-
-### What I’d improve with more time
-
-1. Integration tests for login, refresh rotation, and status transitions  
-2. Surgical Redis invalidation (per org + assignee, not flush-all)  
-3. Admin user-management API (create user, change role) — schema already supports it  
-4. Analytics endpoint (overdue tasks, avg completion time) using `task_status_history`  
-5. WebSocket/SSE when an assigned task’s status changes  
-6. Seed script for demo admin + manager accounts on first boot  
-
----
-
-Enforced on the server (`TaskStatusTransitionValidator`):
-
-```
-TODO → IN_PROGRESS → IN_REVIEW → DONE
-         ↘ BLOCKED (from any active state, not from DONE)
-BLOCKED → TODO (unblock first, then move forward)
-```
-
-Only the **assignee** or a **MANAGER** (or ADMIN) can change status.
-
----
-
-## Task API (examples)
-
-All task routes need `Authorization: Bearer <accessToken>`.
-
-**List (paginated + filters)**
+**Example — list tasks with filters:**
 ```http
 GET /api/tasks?page=1&limit=20&status=TODO&priority=HIGH&assignee=3
 ```
 
-**Create**
-```http
-POST /api/tasks
-{ "projectId": 1, "title": "Fix login", "priority": "HIGH", "assigneeId": 3, "dueDate": "2026-06-15T10:00:00" }
-```
-
-**Update status**
-```http
-PATCH /api/tasks/1/status
-{ "status": "IN_PROGRESS" }
-```
-
-**Assign**
-```http
-PATCH /api/tasks/1/assign
-{ "assigneeId": 3 }
-```
-
-**Error response format**
+**Example — error response:**
 ```json
 {
   "status": 400,
@@ -237,38 +167,21 @@ PATCH /api/tasks/1/assign
 
 ---
 
-## Caching (Redis)
+## Design decisions
 
-**What is cached:** Task list queries in `TaskQueryService`, keyed by:
+**RBAC middleware over controller annotations** — Permissions loaded from the database and checked in a filter layer. Keeps controllers thin and makes role changes a data operation, not a code change.
 
-```
-org:{orgId}:assignee:{assigneeId|all}:page:{p}:limit:{l}:status:{s}:priority:{pr}
-```
+**Refresh token rotation** — Old session revoked on every refresh. Limits impact of a stolen token. Tradeoff: extra DB writes per refresh; access tokens stay stateless for speed.
 
-**TTL:** 10 minutes (see `CacheConfig`).
+**Broad Redis cache invalidation** — Any task write flushes the entire task list cache. Simple and guarantees no stale data. In production I'd move to per-org/per-assignee invalidation.
 
-**Invalidation:** Any task create, update, delete, assign, or status change calls `TaskCacheService.invalidateAllTaskLists()` which clears the entire `taskListByAssignee` cache. I chose **broad invalidation** over surgical key deletes because task writes are less frequent than reads, and it avoids missing a stale key when assignee or filters change.
-
-**Tradeoff:** Simpler and safe. With more time I’d invalidate only keys for the affected org + assignee.
+**Public signup creates Member only** — Prevents self-assigned admin roles. Role promotion handled via `user_roles` table.
 
 ---
 
-## Services (Docker)
+## Local development
 
-| Service | Container | Port |
-|---------|-----------|------|
-| Frontend | tasktracker-web | 80 |
-| Backend | tasktracker-api | 8080 |
-| PostgreSQL | tasktracker-db | 5432 |
-| Redis | tasktracker-redis | 6379 |
-
-Schema auto-applies from `db/init/` on first Postgres start.
-
----
-
-## Local development (without full Docker)
-
-**Postgres + Redis only:**
+**Database + cache only in Docker:**
 ```bash
 docker compose up postgres redis -d
 ```
@@ -284,31 +197,34 @@ npm install
 npm run dev
 ```
 
+- Frontend dev server: http://localhost:5173
+- Backend API: http://localhost:8080
+
 ---
 
-## Project layout
+## Project structure
 
 ```
 Team Task Tracker/
-├── backend/           Spring Boot 3.5 API
-├── frontend/          React + Vite + Kanban UI
-├── db/init/           Postgres schema + RBAC seeds
-├── docs/DATABASE.md   DB design (human-readable)
+├── backend/           Spring Boot REST API
+├── frontend/          React app + Kanban UI
+├── db/init/           Postgres schema & seed data
+├── docs/DATABASE.md   Database design notes
 ├── docker-compose.yml
 └── .env.example
 ```
 
 ---
 
-## Task status transitions
+## Configuration
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `JWT_SECRET` | (see `.env.example`) | HMAC secret for JWT |
-| `POSTGRES_*` | postgres/postgres/tasktracker | Database |
-| `BACKEND_PORT` | 8080 | API port |
-| `FRONTEND_PORT` | 80 | Web UI port |
+| `JWT_SECRET` | (see `.env.example`) | HMAC secret for JWT signing |
+| `POSTGRES_*` | postgres / tasktracker | Database credentials |
+| `BACKEND_PORT` | 8080 | API host port |
+| `FRONTEND_PORT` | 80 | Web UI host port |
 
-Token lifetimes in `application.yaml`:
-- Access: **1 hour** (`3600000` ms)
-- Refresh: **7 days** (`604800000` ms)
+Token lifetimes (`application.yaml`):
+- Access token: **1 hour**
+- Refresh token: **7 days**
